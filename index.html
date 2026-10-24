@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>現代幾何推擠大對決</title>
+<style>
+* {
+box-sizing: border-box;
+user-select: none;
+-webkit-user-select: none;
+}
+body {
+margin: 0;
+padding: 0;
+background-color: #0f172a;
+color: #f8fafc;
+font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+overflow: hidden;
+touch-action: none;
+width: 100vw;
+height: 100vh;
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+}
+
+#game-container {
+position: relative;
+width: 100%;
+max-width: 500px;
+height: 100%;
+max-height: 900px;
+background: #1e293b;
+display: flex;
+flex-direction: column;
+overflow: hidden;
+box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5);
+}
+
+/* 頂部資訊列與暫停按鈕 */
+#top-bar {
+position: absolute;
+top: 10px;
+left: 0;
+width: 100%;
+display: flex;
+flex-direction: column;
+align-items: center;
+z-index: 20;
+pointer-events: none;
+}
+#game-title {
+font-size: 18px;
+font-weight: 800;
+letter-spacing: 1px;
+color: #38bdf8;
+text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+margin-bottom: 2px;
+}
+#game-subtitle {
+font-size: 13px;
+color: #94a3b8;
+margin-bottom: 6px;
+}
+#pause-btn {
+pointer-events: auto;
+background: rgba(30, 41, 59, 0.85);
+border: 1px solid #475569;
+color: #f8fafc;
+padding: 4px 14px;
+font-size: 12px;
+font-weight: bold;
+border-radius: 20px;
+cursor: pointer;
+box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+transition: background 0.2s;
+}
+#pause-btn:active {
+background: #475569;
+}
+
+/* 主畫面畫布區 */
+#canvas-wrapper {
+position: relative;
+flex: 1;
+width: 100%;
+display: flex;
+align-items: center;
+justify-content: center;
+}
+canvas {
+display: block;
+}
+
+/* 四角落外部觸控控制區 */
+.control-panel {
+position: absolute;
+width: 130px;
+height: 130px;
+z-index: 10;
+display: flex;
+align-items: center;
+justify-content: center;
+}
+#panel-tl { bottom: 10px; left: 10px; }
+#panel-tr { bottom: 10px; right: 10px; }
+/* 合作模式：移動搖桿移到上方角落（避開標題列），射擊鈕在下方角落 */
+#game-container.coop #panel-bl { top: 90px; bottom: auto; }
+#game-container.coop #panel-br { top: 90px; bottom: auto; }
+
+/* 合作模式射擊按鈕 */
+.fire-btn {
+width: 72px;
+height: 72px;
+border-radius: 50%;
+display: flex;
+align-items: center;
+justify-content: center;
+font-size: 15px;
+font-weight: bold;
+color: #fff;
+box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+transition: transform 0.1s;
+}
+.fire-btn.pressed { transform: scale(0.9); }
+#fire-tl { background: rgba(59, 130, 246, 0.6); border: 2px solid #60a5fa; }
+#fire-tr { background: rgba(239, 68, 68, 0.6); border: 2px solid #f87171; }
+#panel-bl { bottom: 10px; left: 10px; }
+#panel-br { bottom: 10px; right: 10px; }
+
+.joystick-base {
+position: relative;
+width: 90px;
+height: 90px;
+background: rgba(255, 255, 255, 0.05);
+border: 2px dashed rgba(255, 255, 255, 0.2);
+border-radius: 50%;
+display: flex;
+align-items: center;
+justify-content: center;
+}
+.joystick-knob {
+position: absolute;
+width: 44px;
+height: 44px;
+border-radius: 50%;
+background: rgba(255, 255, 255, 0.25);
+box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+transition: background 0.2s;
+}
+#panel-br .joystick-knob { background: rgba(239, 68, 68, 0.6); border: 2px solid #f87171; }
+#panel-bl .joystick-knob { background: rgba(59, 130, 246, 0.6); border: 2px solid #60a5fa; }
+
+/* 選單與覆蓋層通用樣式 */
+.overlay {
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+background: rgba(15, 23, 42, 0.92);
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+z-index: 50;
+padding: 20px;
+text-align: center;
+}
+.overlay h1 {
+font-size: 26px;
+margin-bottom: 10px;
+color: #38bdf8;
+}
+.overlay p {
+font-size: 14px;
+color: #94a3b8;
+margin-bottom: 24px;
+max-width: 320px;
+line-height: 1.5;
+}
+.btn {
+background: #2563eb;
+color: white;
+border: none;
+padding: 12px 28px;
+font-size: 16px;
+font-weight: bold;
+border-radius: 8px;
+cursor: pointer;
+margin: 8px;
+box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+transition: background 0.2s, transform 0.1s;
+width: 220px;
+}
+.btn:active {
+transform: scale(0.96);
+background: #1d4ed8;
+}
+.btn-secondary {
+background: #475569;
+box-shadow: 0 4px 12px rgba(71, 85, 105, 0.4);
+}
+.btn-secondary:active {
+background: #334155;
+}
+
+/* 倒數計時大字 */
+#countdown-overlay {
+position: absolute;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+background: rgba(15, 23, 42, 0.6);
+display: flex;
+align-items: center;
+justify-content: center;
+z-index: 40;
+font-size: 80px;
+font-weight: 900;
+color: #f59e0b;
+text-shadow: 0 4px 20px rgba(245, 158, 11, 0.6);
+pointer-events: none;
+}
+.hidden {
+display: none !important;
+}
+</style>
+</head>
+<body>
+
+<div id="game-container">
+<!-- 頂部資訊列與暫停按鈕 -->
+<div id="top-bar">
+<div id="game-title">現代幾何推擠大對決</div>
+<div id="game-subtitle">請選擇模式</div>
+<button id="pause-btn" class="hidden">暫停 / 選單</button>
+</div>
+
+<!-- 遊戲畫布 -->
+<div id="canvas-wrapper">
+<canvas id="gameCanvas"></canvas>
+
+<!-- 合作模式射擊按鈕（藍方左下、紅方右下；移動搖桿在上方角落） -->
+<div id="panel-tl" class="control-panel hidden">
+<div class="fire-btn" id="fire-tl">射擊</div>
+</div>
+<div id="panel-tr" class="control-panel hidden">
+<div class="fire-btn" id="fire-tr">射擊</div>
+</div>
+
+<!-- 下方移動 / 衝撞搖桿 -->
+<div id="panel-bl" class="control-panel hidden">
+<div class="joystick-base" id="base-bl">
+<div class="joystick-knob" id="knob-bl"></div>
+</div>
+</div>
+<div id="panel-br" class="control-panel hidden">
+<div class="joystick-base" id="base-br">
+<div class="joystick-knob" id="knob-br"></div>
+</div>
+</div>
+</div>
+
+<!-- 倒數計時層 -->
+<div id="countdown-overlay" class="hidden">3</div>
+
+<!-- 首頁選單 -->
+<div id="menu-overlay" class="overlay">
+<h1>現代幾何推擠大對決</h1>
+<p>選擇您想遊玩的遊戲模式，體驗精確的物理推擠與刺激對決！</p>
+<button class="btn" id="btn-sumo">相撲模式 (雙人對抗)</button>
+<button class="btn" id="btn-coop" style="background-color: #059669; box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4);">合作模式 (雙人打王)</button>
+</div>
+
+<!-- 暫停選單 -->
+<div id="pause-overlay" class="overlay hidden">
+<h1>遊戲暫停</h1>
+<p>您可以隨時返回遊戲，或是重新開始與切換模式。</p>
+<button class="btn" id="btn-resume">繼續遊戲</button>
+<button class="btn btn-secondary" id="btn-restart">重新開始</button>
+<button class="btn btn-secondary" id="btn-switch-mode">切換模式</button>
+</div>
+
+<!-- 結算畫面 -->
+<div id="gameover-overlay" class="overlay hidden">
+<h1 id="gameover-title">遊戲結束</h1>
+<p id="gameover-desc">得分結算</p>
+<button class="btn" id="btn-retry">再玩一次</button>
+<button class="btn btn-secondary" id="btn-menu">返回主選單</button>
+</div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// UI 元素
+const menuOverlay = document.getElementById('menu-overlay');
+const pauseOverlay = document.getElementById('pause-overlay');
+const gameoverOverlay = document.getElementById('gameover-overlay');
+const countdownOverlay = document.getElementById('countdown-overlay');
+const subtitleEl = document.getElementById('game-subtitle');
+const pauseBtn = document.getElementById('pause-btn');
+
+const btnSumo = document.getElementById('btn-sumo');
+const btnCoop = document.getElementById('btn-coop');
+const btnResume = document.getElementById('btn-resume');
+const btnRestart = document.getElementById('btn-restart');
+const btnSwitchMode = document.getElementById('btn-switch-mode');
+const btnRetry = document.getElementById('btn-retry');
+const btnMenu = document.getElementById('btn-menu');
+
+const panels = {
+tl: document.getElementById('panel-tl'),
+tr: document.getElementById('panel-tr'),
+bl: document.getElementById('panel-bl'),
+br: document.getElementById('panel-br')
+};
+
+// 遊戲常數與狀態
+let gameMode = null; // 'sumo' 或 'coop'
+let gameState = 'MENU'; // 'MENU', 'COUNTDOWN', 'PLAYING', 'PAUSED', 'GAMEOVER'
+let countdownValue = 3;
+let countdownTimer = null;
+
+let arena = { x: 0, y: 0, radius: 0 };
+let p1 = { x: 0, y: 0, vx: 0, vy: 0, radius: 22, color: '#3b82f6', score: 0, cooldown: 0, maxCooldown: 90 };
+let p2 = { x: 0, y: 0, vx: 0, vy: 0, radius: 22, color: '#ef4444', score: 0, cooldown: 0, maxCooldown: 90 };
+let boss = { x: 0, y: 0, radius: 35, hp: 75, maxHp: 75, color: '#8b5cf6', targetX: 0, targetY: 0 };
+
+let bullets = [];
+let bossFireTimer = 0;
+let hitsTaken = 0;
+const MAX_HITS = 20;
+const BOSS_FIRE_INTERVAL = 90; // 每 1.5 秒（60fps × 1.5）射一發
+const JOYSTICK_MAX = 30;
+const COOP_MOVE_SPEED = 3; // 搖桿推到底時每幀移動的像素
+const COOP_SHOT_COOLDOWN = 30;
+const BOSS_SPEED = 0.6;
+const BULLET_SPEED = 7; // 我方與魔王子彈共用的速度
+
+// 觸控與拖曳狀態
+let touches = {}; // identifier -> { panelKey, startX, startY, currentX, currentY }
+
+function resizeCanvas() {
+const container = document.getElementById('canvas-wrapper');
+const old = { x: arena.x, y: arena.y, radius: arena.radius };
+canvas.width = container.clientWidth;
+canvas.height = container.clientHeight;
+
+// 競技場設定：實體大小約 15cm 寬度，依螢幕比例轉換為像素 (假設 1cm ≒ 38px，直徑 15cm ≒ 570px，適應容器取適當比例)
+const minDim = Math.min(canvas.width, canvas.height);
+arena.radius = minDim * 0.42; // 約 15-16cm 視覺大小
+arena.x = canvas.width / 2;
+arena.y = canvas.height / 2;
+
+// 遊戲進行中（含手機網址列縮放、旋轉）時，等比例換算位置，不重置戰局
+if (gameState !== 'MENU' && old.radius > 0) {
+const k = arena.radius / old.radius;
+[p1, p2, boss, ...bullets].forEach(o => {
+o.x = arena.x + (o.x - old.x) * k;
+o.y = arena.y + (o.y - old.y) * k;
+});
+boss.targetX = arena.x + (boss.targetX - old.x) * k;
+boss.targetY = arena.y + (boss.targetY - old.y) * k;
+} else {
+resetPositions();
+}
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function pickBossTarget() {
+const a = Math.random() * Math.PI * 2;
+const r = Math.random() * arena.radius * 0.5;
+boss.targetX = arena.x + Math.cos(a) * r;
+boss.targetY = arena.y - arena.radius * 0.15 + Math.sin(a) * r;
+}
+
+function resetPositions() {
+if (gameMode === 'sumo') {
+p1.x = arena.x - arena.radius * 0.4;
+p1.y = arena.y;
+p2.x = arena.x + arena.radius * 0.4;
+p2.y = arena.y;
+p1.vx = p1.vy = p2.vx = p2.vy = 0;
+p1.cooldown = p2.cooldown = 0;
+} else if (gameMode === 'coop') {
+p1.x = arena.x - 40;
+p1.y = arena.y + arena.radius * 0.6;
+p2.x = arena.x + 40;
+p2.y = arena.y + arena.radius * 0.6;
+p1.vx = p1.vy = p2.vx = p2.vy = 0;
+p1.cooldown = p2.cooldown = 0;
+
+boss.x = arena.x;
+boss.y = arena.y - arena.radius * 0.4;
+boss.hp = 75;
+boss.maxHp = 75;
+pickBossTarget();
+bullets = [];
+bossFireTimer = 0;
+hitsTaken = 0;
+}
+}
+
+function clearTouches() {
+touches = {};
+['bl', 'br'].forEach(k => {
+document.getElementById(`knob-${k}`).style.transform = 'translate(0px, 0px)';
+});
+}
+
+// 啟動倒數
+function startCountdown(mode) {
+gameMode = mode;
+menuOverlay.classList.add('hidden');
+pauseOverlay.classList.add('hidden');
+gameoverOverlay.classList.add('hidden');
+pauseBtn.classList.remove('hidden');
+
+resetPositions();
+clearTouches();
+setupControlsForMode();
+
+gameState = 'COUNTDOWN';
+countdownValue = 3;
+countdownOverlay.textContent = countdownValue;
+countdownOverlay.classList.remove('hidden');
+
+if (countdownTimer) clearInterval(countdownTimer);
+countdownTimer = setInterval(() => {
+countdownValue--;
+if (countdownValue > 0) {
+countdownOverlay.textContent = countdownValue;
+} else if (countdownValue === 0) {
+countdownOverlay.textContent = 'GO!';
+} else {
+clearInterval(countdownTimer);
+countdownTimer = null;
+countdownOverlay.classList.add('hidden');
+gameState = 'PLAYING';
+}
+}, 1000);
+}
+
+function setupControlsForMode() {
+Object.values(panels).forEach(p => p.classList.add('hidden'));
+// 相撲：搖桿在 P1 左下、P2 右下；合作：搖桿移到左上 / 右上，射擊鈕在左下 / 右下
+panels.bl.classList.remove('hidden');
+panels.br.classList.remove('hidden');
+document.getElementById('game-container').classList.toggle('coop', gameMode === 'coop');
+if (gameMode === 'sumo') {
+subtitleEl.textContent = '相撲模式：拖曳瞄準放開衝撞，將對手推出圓圈！';
+} else {
+panels.tl.classList.remove('hidden');
+panels.tr.classList.remove('hidden');
+updateCoopHud();
+}
+}
+
+function updateCoopHud() {
+subtitleEl.textContent = `合作模式　生命 ${MAX_HITS - hitsTaken}/${MAX_HITS}　魔王 ${boss.hp}/${boss.maxHp}`;
+}
+
+// 觸控事件綁定：依實際顯示中的搖桿位置判定（含周圍 20px 容錯）
+function getPanelKey(touchX, touchY) {
+const pad = 20;
+for (const key of Object.keys(panels)) {
+const panel = panels[key];
+if (panel.classList.contains('hidden')) continue;
+const r = panel.getBoundingClientRect();
+if (touchX >= r.left - pad && touchX <= r.right + pad && touchY >= r.top - pad && touchY <= r.bottom + pad) {
+return key;
+}
+}
+return null;
+}
+
+function playerForPanel(panelKey) {
+if (panelKey === 'bl' || panelKey === 'tl') return p1;
+if (panelKey === 'br' || panelKey === 'tr') return p2;
+return null;
+}
+
+// 合作模式：發射對色子彈，自動瞄準魔王當前位置
+function fireBullet(player) {
+if (player.cooldown > 0) return;
+const angleToBoss = Math.atan2(boss.y - player.y, boss.x - player.x);
+bullets.push({
+x: player.x,
+y: player.y,
+vx: Math.cos(angleToBoss) * BULLET_SPEED,
+vy: Math.sin(angleToBoss) * BULLET_SPEED,
+radius: 6,
+color: player.color,
+isBoss: false
+});
+player.cooldown = COOP_SHOT_COOLDOWN;
+}
+
+window.addEventListener('pointerdown', (e) => {
+if (gameState !== 'PLAYING') return;
+const panelKey = getPanelKey(e.clientX, e.clientY);
+if (!panelKey) return;
+// 射擊鈕：按下立即發射
+if (panelKey === 'tl' || panelKey === 'tr') {
+fireBullet(playerForPanel(panelKey));
+const btn = document.getElementById(`fire-${panelKey}`);
+btn.classList.add('pressed');
+setTimeout(() => btn.classList.remove('pressed'), 100);
+return;
+}
+// 同一個搖桿同時只接受一根手指
+if (Object.values(touches).some(t => t.panelKey === panelKey)) return;
+
+const base = document.getElementById(`base-${panelKey}`);
+const rect = base.getBoundingClientRect();
+const centerX = rect.left + rect.width / 2;
+const centerY = rect.top + rect.height / 2;
+
+touches[e.pointerId] = {
+panelKey,
+startX: centerX,
+startY: centerY,
+currentX: e.clientX,
+currentY: e.clientY
+};
+updateJoystickUI(e.pointerId);
+});
+
+window.addEventListener('pointermove', (e) => {
+if (!touches[e.pointerId]) return;
+touches[e.pointerId].currentX = e.clientX;
+touches[e.pointerId].currentY = e.clientY;
+updateJoystickUI(e.pointerId);
+});
+
+window.addEventListener('pointerup', (e) => {
+if (!touches[e.pointerId]) return;
+handleRelease(e.pointerId);
+delete touches[e.pointerId];
+});
+
+window.addEventListener('pointercancel', (e) => {
+if (!touches[e.pointerId]) return;
+resetKnob(touches[e.pointerId].panelKey);
+delete touches[e.pointerId];
+});
+
+// 搖桿偏移量（限制在最大半徑內）
+function joystickVector(t) {
+let dx = t.currentX - t.startX;
+let dy = t.currentY - t.startY;
+const dist = Math.hypot(dx, dy);
+if (dist > JOYSTICK_MAX) {
+dx = (dx / dist) * JOYSTICK_MAX;
+dy = (dy / dist) * JOYSTICK_MAX;
+}
+return { dx, dy, dist };
+}
+
+function updateJoystickUI(pointerId) {
+const t = touches[pointerId];
+const knob = document.getElementById(`knob-${t.panelKey}`);
+const { dx, dy } = joystickVector(t);
+knob.style.transform = `translate(${dx}px, ${dy}px)`;
+}
+
+function resetKnob(panelKey) {
+document.getElementById(`knob-${panelKey}`).style.transform = 'translate(0px, 0px)';
+}
+
+function handleRelease(pointerId) {
+const t = touches[pointerId];
+resetKnob(t.panelKey);
+if (gameState !== 'PLAYING') return;
+
+// 合作模式的搖桿只負責移動，放開不做任何事
+if (gameMode !== 'sumo') return;
+const player = playerForPanel(t.panelKey);
+if (!player || player.cooldown > 0) return;
+
+const dx = t.currentX - t.startX;
+const dy = t.currentY - t.startY;
+const dist = Math.hypot(dx, dy);
+
+if (dist < 10) return; // 忽略微小觸碰
+// 相撲模式衝撞：非反向，拉向哪裡就朝哪裡衝撞 (dx, dy)
+const angle = Math.atan2(dy, dx);
+const dashSpeed = 16; // 約 2.5cm 距離感之瞬間推進力
+player.vx = Math.cos(angle) * dashSpeed;
+player.vy = Math.sin(angle) * dashSpeed;
+player.cooldown = player.maxCooldown;
+}
+
+// 將物體限制在競技場內
+function keepInArena(o) {
+const d = Math.hypot(o.x - arena.x, o.y - arena.y);
+const maxD = arena.radius - o.radius;
+if (d > maxD) {
+o.x = arena.x + (o.x - arena.x) / d * maxD;
+o.y = arena.y + (o.y - arena.y) / d * maxD;
+}
+}
+
+// 遊戲主迴圈；dt 以 60fps 的一幀為 1，讓高刷新率螢幕速度一致
+function update(dt) {
+if (gameState !== 'PLAYING') return;
+
+// 冷卻遞減
+p1.cooldown = Math.max(0, p1.cooldown - dt);
+p2.cooldown = Math.max(0, p2.cooldown - dt);
+
+if (gameMode === 'sumo') {
+// 物理運動與摩擦力
+const friction = Math.pow(0.92, dt);
+[p1, p2].forEach(p => {
+p.x += p.vx * dt; p.y += p.vy * dt;
+p.vx *= friction; p.vy *= friction;
+});
+
+// 雙人碰撞
+const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+const minDist = p1.radius + p2.radius;
+if (dist < minDist && dist > 0) {
+const overlap = minDist - dist;
+const nx = (p2.x - p1.x) / dist;
+const ny = (p2.y - p1.y) / dist;
+p1.x -= nx * overlap * 0.5;
+p1.y -= ny * overlap * 0.5;
+p2.x += nx * overlap * 0.5;
+p2.y += ny * overlap * 0.5;
+
+// 只在彼此接近時交換速度，避免重疊時每幀反覆彈跳
+const closing = (p2.vx - p1.vx) * nx + (p2.vy - p1.vy) * ny;
+if (closing < 0) {
+let tempVx = p1.vx; let tempVy = p1.vy;
+p1.vx = p2.vx * 0.8; p1.vy = p2.vy * 0.8;
+p2.vx = tempVx * 0.8; p2.vy = tempVy * 0.8;
+}
+}
+
+// 判斷是否出界（競技場範圍）
+const d1 = Math.hypot(p1.x - arena.x, p1.y - arena.y);
+const d2 = Math.hypot(p2.x - arena.x, p2.y - arena.y);
+
+if (d1 > arena.radius - p1.radius) {
+endGame('紅方獲勝！', '藍方率先被推出競技場！');
+} else if (d2 > arena.radius - p2.radius) {
+endGame('藍方獲勝！', '紅方率先被推出競技場！');
+}
+
+} else if (gameMode === 'coop') {
+// 玩家移動：按住搖桿往該方向移動
+Object.values(touches).forEach(t => {
+const player = playerForPanel(t.panelKey);
+if (!player) return;
+const { dx, dy } = joystickVector(t);
+player.x += (dx / JOYSTICK_MAX) * COOP_MOVE_SPEED * dt;
+player.y += (dy / JOYSTICK_MAX) * COOP_MOVE_SPEED * dt;
+});
+[p1, p2].forEach(p => {
+// 玩家不能穿過魔王
+const dB = Math.hypot(p.x - boss.x, p.y - boss.y);
+const minB = p.radius + boss.radius;
+if (dB < minB && dB > 0) {
+p.x = boss.x + (p.x - boss.x) / dB * minB;
+p.y = boss.y + (p.y - boss.y) / dB * minB;
+}
+keepInArena(p);
+});
+
+// 魔王移動：每秒移動 1cm (約對應 0.6 像素/幀)，抵達目標點後換下一個隨機點
+const toTarget = Math.hypot(boss.targetX - boss.x, boss.targetY - boss.y);
+if (toTarget < BOSS_SPEED * dt + 1) {
+pickBossTarget();
+} else {
+boss.x += (boss.targetX - boss.x) / toTarget * BOSS_SPEED * dt;
+boss.y += (boss.targetY - boss.y) / toTarget * BOSS_SPEED * dt;
+}
+
+// 魔王每 2 秒發射一發黑色子彈攻擊玩家
+bossFireTimer += dt;
+if (bossFireTimer >= BOSS_FIRE_INTERVAL) {
+bossFireTimer -= BOSS_FIRE_INTERVAL;
+const target = Math.random() < 0.5 ? p1 : p2;
+const bAngle = Math.atan2(target.y - boss.y, target.x - boss.x);
+bullets.push({
+x: boss.x,
+y: boss.y,
+vx: Math.cos(bAngle) * BULLET_SPEED,
+vy: Math.sin(bAngle) * BULLET_SPEED,
+radius: 7,
+color: '#000000',
+isBoss: true
+});
+}
+
+// 更新子彈
+for (let i = bullets.length - 1; i >= 0; i--) {
+let b = bullets[i];
+b.x += b.vx * dt;
+b.y += b.vy * dt;
+
+// 子彈與魔王碰撞
+if (!b.isBoss) {
+const dBoss = Math.hypot(b.x - boss.x, b.y - boss.y);
+if (dBoss < boss.radius + b.radius) {
+boss.hp -= 1;
+bullets.splice(i, 1);
+updateCoopHud();
+if (boss.hp <= 0) {
+endGame('挑戰成功！', '你們成功合力擊敗了魔王！');
+return;
+}
+continue;
+}
+} else {
+// 黑色子彈與玩家碰撞
+const d1P = Math.hypot(b.x - p1.x, b.y - p1.y);
+const d2P = Math.hypot(b.x - p2.x, b.y - p2.y);
+if (d1P < p1.radius + b.radius || d2P < p2.radius + b.radius) {
+hitsTaken++;
+bullets.splice(i, 1);
+updateCoopHud();
+if (hitsTaken >= MAX_HITS) {
+endGame('挑戰失敗', `被魔王擊中達 ${MAX_HITS} 次！`);
+return;
+}
+continue;
+}
+}
+
+// 超出邊界移除子彈
+if (Math.hypot(b.x - arena.x, b.y - arena.y) > arena.radius) {
+bullets.splice(i, 1);
+}
+}
+}
+}
+
+function draw() {
+ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+// 繪製競技場底座
+ctx.save();
+ctx.beginPath();
+ctx.arc(arena.x, arena.y, arena.radius, 0, Math.PI * 2);
+ctx.fillStyle = '#0f172a';
+ctx.fill();
+ctx.lineWidth = 4;
+ctx.strokeStyle = gameMode === 'coop' ? '#10b981' : '#38bdf8';
+ctx.stroke();
+ctx.restore();
+
+if (gameMode === 'sumo') {
+// 繪製相撲玩家
+drawPlayer(p1);
+drawPlayer(p2);
+
+// 繪製拖曳中的虛線瞄準輔助線
+Object.values(touches).forEach(t => {
+const player = playerForPanel(t.panelKey);
+if (player) {
+let dx = t.currentX - t.startX;
+let dy = t.currentY - t.startY;
+if (Math.hypot(dx, dy) > 10) {
+ctx.save();
+ctx.beginPath();
+ctx.moveTo(player.x, player.y);
+// 修正方向：指示與拖曳同向
+ctx.lineTo(player.x + dx * 1.5, player.y + dy * 1.5);
+ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+ctx.lineWidth = 3;
+ctx.setLineDash([6, 6]);
+ctx.stroke();
+ctx.restore();
+}
+}
+});
+
+} else if (gameMode === 'coop') {
+// 繪製合作玩家與魔王
+drawPlayer(p1, COOP_SHOT_COOLDOWN);
+drawPlayer(p2, COOP_SHOT_COOLDOWN);
+
+// 繪製魔王
+ctx.save();
+ctx.beginPath();
+ctx.arc(boss.x, boss.y, boss.radius, 0, Math.PI * 2);
+ctx.fillStyle = boss.color;
+ctx.fill();
+ctx.lineWidth = 3;
+ctx.strokeStyle = '#c084fc';
+ctx.stroke();
+
+// 魔王血條
+ctx.fillStyle = '#334155';
+ctx.fillRect(boss.x - 30, boss.y - boss.radius - 14, 60, 8);
+ctx.fillStyle = '#ef4444';
+ctx.fillRect(boss.x - 30, boss.y - boss.radius - 14, 60 * (boss.hp / boss.maxHp), 8);
+ctx.restore();
+
+// 繪製子彈
+bullets.forEach(b => {
+ctx.save();
+ctx.beginPath();
+ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+ctx.fillStyle = b.color;
+ctx.fill();
+ctx.lineWidth = 2;
+ctx.strokeStyle = '#ffffff';
+ctx.stroke();
+ctx.restore();
+});
+}
+}
+
+function drawPlayer(p, maxCooldown = p.maxCooldown) {
+ctx.save();
+ctx.beginPath();
+ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+ctx.fillStyle = p.color;
+ctx.fill();
+ctx.lineWidth = 3;
+ctx.strokeStyle = '#ffffff';
+ctx.stroke();
+
+// 灰色扇形冷卻動畫
+if (p.cooldown > 0) {
+const angleProgress = (p.cooldown / maxCooldown) * Math.PI * 2;
+ctx.beginPath();
+ctx.moveTo(p.x, p.y);
+ctx.arc(p.x, p.y, p.radius, -Math.PI / 2, -Math.PI / 2 + angleProgress);
+ctx.lineTo(p.x, p.y);
+ctx.fillStyle = 'rgba(100, 116, 139, 0.75)';
+ctx.fill();
+}
+ctx.restore();
+}
+
+let lastTime = performance.now();
+function loop(now) {
+const dt = Math.min((now - lastTime) / (1000 / 60), 3);
+lastTime = now;
+update(dt);
+draw();
+requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+function endGame(title, desc) {
+gameState = 'GAMEOVER';
+pauseBtn.classList.add('hidden');
+clearTouches();
+document.getElementById('gameover-title').textContent = title;
+document.getElementById('gameover-desc').textContent = desc;
+gameoverOverlay.classList.remove('hidden');
+}
+
+function backToMenu() {
+if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+countdownOverlay.classList.add('hidden');
+pauseOverlay.classList.add('hidden');
+gameoverOverlay.classList.add('hidden');
+pauseBtn.classList.add('hidden');
+Object.values(panels).forEach(p => p.classList.add('hidden'));
+clearTouches();
+subtitleEl.textContent = '請選擇模式';
+menuOverlay.classList.remove('hidden');
+gameState = 'MENU';
+}
+
+// 按鈕互動事件
+btnSumo.addEventListener('click', () => startCountdown('sumo'));
+btnCoop.addEventListener('click', () => startCountdown('coop'));
+
+pauseBtn.addEventListener('click', () => {
+if (gameState === 'PLAYING') {
+gameState = 'PAUSED';
+clearTouches();
+pauseOverlay.classList.remove('hidden');
+}
+});
+
+btnResume.addEventListener('click', () => {
+pauseOverlay.classList.add('hidden');
+gameState = 'PLAYING';
+});
+
+btnRestart.addEventListener('click', () => startCountdown(gameMode));
+btnSwitchMode.addEventListener('click', backToMenu);
+btnRetry.addEventListener('click', () => startCountdown(gameMode));
+btnMenu.addEventListener('click', backToMenu);
+</script>
+
+</body>
+</html>
